@@ -11,12 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('categories', function (Blueprint $table) {
-            $table->bigIncrements('id');
+        // Goal: Who we buy from. Example: Supplier A, Supplier B.
+        Schema::create('suppliers', function (Blueprint $table) {
+            $table->id();
             $table->string('name')->unique();
-            $table->string('slug')->unique();
+            $table->string('phone')->nullable();
+            $table->string('email')->nullable();
             $table->timestamps();
-            $table->softDeletes();
         });
     }
 
@@ -25,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('categories');
+        Schema::dropIfExists('suppliers');
     }
 };

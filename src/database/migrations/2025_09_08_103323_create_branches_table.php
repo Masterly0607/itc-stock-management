@@ -11,16 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Goal: Each company location (HQ or branch). Example: HQ, Phnom Penh Branch.
         Schema::create('branches', function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->string('name')->unique();
-            $table->string('code', 20)->unique();
+            $table->id();
+            $table->string('code')->unique();
+            $table->string('name');
             $table->foreignId('province_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('district_id')->nullable()->constrained()->nullOnDelete();
             $table->string('address')->nullable();
-            $table->string('phone')->nullable();
             $table->timestamps();
-            $table->softDeletes();
         });
     }
 

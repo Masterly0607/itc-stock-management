@@ -11,15 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Goal: Who we sell to (our customers). Example: Lucky Mart, assigned to Phnom Penh branch.
         Schema::create('distributors', function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->string('name')->unique();
-            $table->string('contact_name')->nullable();
+            $table->id();
+            $table->foreignId('branch_id')->constrained()->cascadeOnDelete();
+            $table->string('name');
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
-            $table->string('address')->nullable();
             $table->timestamps();
-            $table->softDeletes();
+            $table->unique(['branch_id', 'name']);
         });
     }
 

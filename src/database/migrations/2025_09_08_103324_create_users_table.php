@@ -11,6 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Goal: People who log into system, linked to a branch. Example: Admin of Phnom Penh branch.
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -18,10 +19,8 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
-            $table->foreignId('branch_id')
-                  ->nullable()
-                  ->constrained()
-                  ->nullOnDelete();
+            $table->foreignId('branch_id')->nullable()->constrained()->nullOnDelete();
+            $table->index('branch_id');
 
             $table->timestamps();
         });

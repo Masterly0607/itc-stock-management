@@ -6,7 +6,5 @@ use Illuminate\Database\Eloquent\Model;
 
 class StockLevel extends Model
 {
-     protected $guarded = [];
-  public function branch(){ return $this->belongsTo(Branch::class); }
-  public function product(){ return $this->belongsTo(Product::class); }
+    //
 }

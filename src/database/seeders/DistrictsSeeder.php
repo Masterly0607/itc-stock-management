@@ -2,21 +2,25 @@
 
 namespace Database\Seeders;
 
+use App\Models\District;
+use App\Models\Province;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class DistrictsSeeder extends Seeder
 {
     public function run(): void
     {
-        $pp = DB::table('provinces')->where('name', 'Phnom Penh')->value('id');
-        $sr = DB::table('provinces')->where('name', 'Siem Reap')->value('id');
-        $now = now();
-
-        DB::table('districts')->upsert([
-            ['province_id' => $pp, 'name' => 'Chamkar Mon', 'code' => 'CKM', 'created_at' => $now, 'updated_at' => $now],
-            ['province_id' => $pp, 'name' => 'Prampir Makara', 'code' => '7MK', 'created_at' => $now, 'updated_at' => $now],
-            ['province_id' => $sr, 'name' => 'Siem Reap', 'code' => 'SRK', 'created_at' => $now, 'updated_at' => $now],
-        ], ['province_id', 'name'], ['code', 'updated_at']);
+        $pp = Province::where('name', 'Phnom Penh')->first();
+        $sr = Province::where('name', 'Siem Reap')->first();
+        $rows = [];
+        if ($pp) {
+            $rows[] = ['province_id' => $pp->id, 'name' => 'Chamkar Mon'];
+            $rows[] = ['province_id' => $pp->id, 'name' => 'Daun Penh'];
+        }
+        if ($sr) {
+            $rows[] = ['province_id' => $sr->id, 'name' => 'Siem Reap'];
+            $rows[] = ['province_id' => $sr->id, 'name' => 'Prasat Bakong'];
+        }
+        District::query()->upsert($rows, ['province_id', 'name'], ['name', 'province_id']);
     }
 }

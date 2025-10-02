@@ -11,18 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Goal: Actual items sold/bought. Example: SKU SH-001, “Shampoo 250ml”.
         Schema::create('products', function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->string('sku', 50)->unique();
+            $table->id();
+            $table->string('sku')->unique();
             $table->string('name');
-            $table->string('slug')->unique();
-            $table->foreignId('category_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('unit', 20)->default('pcs');
-            $table->decimal('price', 12, 2)->default(0);
+            $table->foreignId('category_id')->constrained('product_categories')->cascadeOnDelete();
+            $table->string('unit')->default('pcs');
+            $table->decimal('base_price', 12, 2)->default(0);
+            $table->unsignedInteger('min_stock')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
-            $table->softDeletes();
-            $table->unique(['name', 'category_id']);
+            $table->index(['category_id', 'is_active']);
         });
     }
 
