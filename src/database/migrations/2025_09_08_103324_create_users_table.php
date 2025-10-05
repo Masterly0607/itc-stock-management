@@ -21,7 +21,6 @@ return new class extends Migration
             $table->rememberToken();
             $table->foreignId('branch_id')->nullable()->constrained()->nullOnDelete();
             $table->index('branch_id');
-
             $table->timestamps();
         });
 

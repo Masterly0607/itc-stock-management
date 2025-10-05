@@ -6,37 +6,19 @@ use App\Models\User;
 use App\Models\Branch;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission;
-use Illuminate\Support\Facades\Hash;
 
 class RolesAndUsersSeeder extends Seeder
 {
     public function run(): void
     {
-        $super = Role::firstOrCreate(['name' => 'Super Admin']);
-        $admin = Role::firstOrCreate(['name' => 'Admin']);
-        $dist  = Role::firstOrCreate(['name' => 'Distributor']);
-        $perms = [
-            'products.view',
-            'products.create',
-            'products.update',
-            'orders.view',
-            'orders.create',
-            'orders.deliver',
-            'purchases.create',
-            'purchases.receive',
-            'transfers.create',
-            'transfers.ship',
-            'transfers.receive'
-        ];
-        foreach ($perms as $p) Permission::firstOrCreate(['name' => $p]);
-        $super->givePermissionTo(Permission::all());
+        $roles = collect(['Super Admin', 'Admin', 'Distributor'])
+            ->each(fn($r) => Role::firstOrCreate(['name' => $r]));
 
-        $hq = Branch::where('code', 'HQ')->first();
-        $user = User::firstOrCreate(
-            ['email' => 'admin@itc.local'],
-            ['name' => 'Super Admin', 'password' => Hash::make('password'), 'branch_id' => $hq?->id]
+        $branch = Branch::first();
+        $super = User::firstOrCreate(
+            ['email' => 'super@admin.com'],
+            ['name' => 'Super Admin', 'password' => bcrypt('password'), 'branch_id' => $branch?->id,]
         );
-        if (!$user->hasRole('Super Admin')) $user->assignRole('Super Admin');
+        $super->syncRoles('Super Admin');
     }
 }
