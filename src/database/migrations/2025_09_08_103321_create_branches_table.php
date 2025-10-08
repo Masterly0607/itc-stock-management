@@ -18,7 +18,6 @@ return new class extends Migration
             $table->string('name');
             $table->foreignId('province_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('district_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('address')->nullable();
             $table->timestamps();
         });
     }
