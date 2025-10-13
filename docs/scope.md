@@ -10,7 +10,7 @@ It ensures accurate stock tracking, prevents negative stock, and applies the **P
 
 | Role | Description | Permissions |
 |------|--------------|-------------|
-| **Super Admin** | Controls the whole system | - Manage all provinces, districts, and branches<br>- Create and manage users (Admins & Distributors)<br>- Approve and monitor all stock transfers<br>- Manage products, categories, and prices<br>- View all reports and activities<br>- Configure system settings and permissions |
+| **Super Admin** | Controls the whole system | - Manage all provinces, districts, and branches<br>- Create and manage users (Admins & Distributors)<br>- Approve and monitor all stock transfers<br>- Manage products, categories, and prices<br>- Manage suppliers and purchase orders<br>- View all reports and activities<br>- Configure system settings and permissions |
 | **Admin** | Manages one province branch | - Approve distributor stock requests<br>- Manage province-level stock and transfers<br>- View province reports<br>- Manage distributors in the same province |
 | **Distributor** | Manages one district branch | - Create stock requests to Admin<br>- Receive approved stock<br>- Record sales and payments<br>- View own branch transactions |
 
@@ -22,6 +22,11 @@ It ensures accurate stock tracking, prevents negative stock, and applies the **P
 - Manage **Categories**, **Products**, **Units**, and **Prices**
 - Each product belongs to a category and can have multiple units (e.g., Box, Piece)
 - Only Super Admin can add or edit products
+
+### 🏭 Supplier & Purchasing
+- Super Admin can manage **Suppliers** (name, contact, tax ID, etc.)
+- HQ can create **Purchase Orders (POs)** to receive new stock
+- Receiving a PO automatically increases HQ stock and logs a **Ledger IN (PURCHASE)**
 
 ### 🔁 Stock Request & Transfer
 - **Distributor** requests stock from **Admin**
@@ -49,7 +54,7 @@ It ensures accurate stock tracking, prevents negative stock, and applies the **P
 | **Location** | Provinces, Districts, Branches |
 | **User Management** | Users, Roles |
 | **Inventory** | Stock Levels, Inventory Ledger |
-| **Operations** | Stock Requests, Transfers, Sales Orders, Payments, Adjustments |
+| **Operations** | Stock Requests, Transfers, Sales Orders, Payments, Adjustments, **Suppliers**, **Purchase Orders** |
 
 ---
 
@@ -76,5 +81,5 @@ To clearly define what the system does, who can do what, and how stock flows —
 ---
 
 **Project:** Stock Management System (ITC Internship Project)  
-**Author:** [Your Name]  
-**Phase:** 1 – Scope & Requirements
+**Author:** Sok Masterly  
+**Phase:** 1 – Scope & Requirements 
