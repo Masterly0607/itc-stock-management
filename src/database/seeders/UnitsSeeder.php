@@ -2,16 +2,24 @@
 
 namespace Database\Seeders;
 
+use App\Models\Unit;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class UnitsSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('units')->upsert([
-            ['id' => 1, 'name' => 'Piece', 'symbol' => 'pcs', 'base_ratio' => 1, 'created_at' => now(), 'updated_at' => now()],
-            ['id' => 2, 'name' => 'Box', 'symbol' => 'box', 'base_ratio' => 12, 'created_at' => now(), 'updated_at' => now()],
-        ], ['id'], ['name', 'symbol', 'base_ratio', 'updated_at']);
+        $rows = [
+            ['name' => 'Piece', 'code' => 'PC'],
+            ['name' => 'Box',   'code' => 'BOX'],
+            ['name' => 'Case',  'code' => 'CASE'],
+            ['name' => 'Pack',  'code' => 'PACK'],
+            ['name' => 'Kilogram', 'code' => 'KG'],
+            ['name' => 'Litre',    'code' => 'L'],
+        ];
+
+        foreach ($rows as $r) {
+            Unit::firstOrCreate(['code' => $r['code']], $r);
+        }
     }
 }

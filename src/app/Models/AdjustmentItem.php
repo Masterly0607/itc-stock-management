@@ -10,13 +10,7 @@ class AdjustmentItem extends Model
     use HasFactory;
 
     protected $fillable = ['adjustment_id', 'product_id', 'unit_id', 'qty_delta', 'note'];
-
-    protected $casts = [
-        'adjustment_id' => 'integer',
-        'product_id'    => 'integer',
-        'unit_id'       => 'integer',
-        'qty_delta'     => 'decimal:2',
-    ];
+    protected $casts = ['qty_delta' => 'decimal:3'];
 
     public function adjustment()
     {

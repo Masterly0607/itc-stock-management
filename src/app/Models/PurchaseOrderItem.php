@@ -9,16 +9,20 @@ class PurchaseOrderItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['purchase_order_id', 'product_id', 'unit_id', 'qty_ordered', 'qty_received', 'unit_cost', 'line_total'];
-
+    protected $fillable = [
+        'purchase_order_id',
+        'product_id',
+        'unit_id',
+        'qty_ordered',
+        'qty_received',
+        'unit_cost',
+        'line_total',
+    ];
     protected $casts = [
-        'purchase_order_id' => 'integer',
-        'product_id'        => 'integer',
-        'unit_id'           => 'integer',
-        'qty_ordered'       => 'decimal:2',
-        'qty_received'      => 'decimal:2',
-        'unit_cost'         => 'decimal:4',
-        'line_total'        => 'decimal:2',
+        'qty_ordered'  => 'decimal:3',
+        'qty_received' => 'decimal:3',
+        'unit_cost'    => 'decimal:2',
+        'line_total'   => 'decimal:2',
     ];
 
     public function purchaseOrder()

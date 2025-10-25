@@ -10,14 +10,7 @@ class StockLevel extends Model
     use HasFactory;
 
     protected $fillable = ['branch_id', 'product_id', 'unit_id', 'on_hand', 'reserved'];
-
-    protected $casts = [
-        'branch_id' => 'integer',
-        'product_id' => 'integer',
-        'unit_id'   => 'integer',
-        'on_hand'   => 'decimal:2',
-        'reserved'  => 'decimal:2',
-    ];
+    protected $casts = ['on_hand' => 'decimal:3', 'reserved' => 'decimal:3'];
 
     public function branch()
     {

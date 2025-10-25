@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\UserResource\Pages;
 
 use App\Filament\Resources\UserResource;
-use App\Models\Branch;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateUser extends CreateRecord
@@ -12,24 +11,25 @@ class CreateUser extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        // Let Super Admin's selected branch_id pass through.
-        // Only override for Admins (to lock to their branch)
         $me = auth()->user();
-
         if ($me?->hasRole('Admin')) {
-            $data['branch_id'] = $me->branch_id;
-            $data['role'] = 'Distributor';
+            $data['branch_id'] = $me->branch_id; // force admin's own branch
         }
-
         return $data;
     }
 
     protected function afterCreate(): void
     {
-        $role = $this->form->getRawState()['role'] ?? null;
+        /** @var \App\Models\User $user */
+        $user = $this->record;
 
+        // ✅ Read the virtual 'role' from $this->data
+        $role = data_get($this->data, 'role');
         if ($role) {
-            $this->record->assignRole($role);
+            $user->syncRoles([$role]);    // role name (e.g., 'Admin', 'Distributor')
         }
+
+        // refresh relation so the list shows it immediately
+        $user->load('roles');
     }
 }

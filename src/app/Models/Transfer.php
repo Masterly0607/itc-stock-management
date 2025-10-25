@@ -9,13 +9,13 @@ class Transfer extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['from_branch_id', 'to_branch_id', 'status', 'dispatched_at', 'received_at', 'ref_no'];
-
-    protected $casts = [
-        'from_branch_id' => 'integer',
-        'to_branch_id'   => 'integer',
-        'dispatched_at'  => 'datetime',
-        'received_at'    => 'datetime',
+    // status: DRAFT|DISPATCHED|RECEIVED|CANCELLED
+    protected $fillable = [
+        'from_branch_id',
+        'to_branch_id',
+        'status',
+        'stock_request_id',
+        'ref_no',
     ];
 
     public function fromBranch()
@@ -25,6 +25,10 @@ class Transfer extends Model
     public function toBranch()
     {
         return $this->belongsTo(Branch::class, 'to_branch_id');
+    }
+    public function stockRequest()
+    {
+        return $this->belongsTo(StockRequest::class);
     }
     public function items()
     {

@@ -11,12 +11,11 @@ class District extends Model
 
     protected $fillable = ['province_id', 'name', 'code'];
 
-    protected $casts = ['province_id' => 'integer'];
-
     public function province()
     {
         return $this->belongsTo(Province::class);
     }
+
     public function branches()
     {
         return $this->hasMany(Branch::class);

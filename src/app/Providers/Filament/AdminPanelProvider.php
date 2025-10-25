@@ -27,6 +27,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            ->brandName('ITC Stock Management')
             ->login()
             ->renderHook('panels::auth.login.form.after', fn() => view('auth.inactive-alert'))
             ->colors([

@@ -9,14 +9,16 @@ class StockRequestItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['stock_request_id', 'product_id', 'unit_id', 'qty_requested', 'qty_approved'];
-
+    protected $fillable = [
+        'stock_request_id',
+        'product_id',
+        'unit_id',
+        'qty_requested',
+        'qty_approved',
+    ];
     protected $casts = [
-        'stock_request_id' => 'integer',
-        'product_id'       => 'integer',
-        'unit_id'          => 'integer',
-        'qty_requested'    => 'decimal:2',
-        'qty_approved'     => 'decimal:2',
+        'qty_requested' => 'decimal:3',
+        'qty_approved'  => 'decimal:3',
     ];
 
     public function stockRequest()

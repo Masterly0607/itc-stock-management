@@ -10,13 +10,7 @@ class TransferItem extends Model
     use HasFactory;
 
     protected $fillable = ['transfer_id', 'product_id', 'unit_id', 'qty'];
-
-    protected $casts = [
-        'transfer_id' => 'integer',
-        'product_id'  => 'integer',
-        'unit_id'     => 'integer',
-        'qty'         => 'decimal:2',
-    ];
+    protected $casts = ['qty' => 'decimal:3'];
 
     public function transfer()
     {

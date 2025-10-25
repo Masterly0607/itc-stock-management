@@ -15,20 +15,20 @@ class UsersSeeder extends Seeder
         $dp = DB::table('branches')->where('code', 'BR-DNP')->value('id');
 
         $super = User::updateOrCreate(
-            ['email' => 'super@hq.local'],
-            ['name' => 'Super Admin', 'password' => bcrypt('password'), 'branch_id' => $hq, 'status' => 'ACTIVE']
+            ['email' => 'superadmin@example.com'],
+            ['name' => 'Super Admin', 'password' => bcrypt('1234'), 'branch_id' => $hq, 'status' => 'ACTIVE']
         );
         $super->syncRoles(['Super Admin']);
 
         $admin = User::updateOrCreate(
-            ['email' => 'admin.pp@hq.local'],
-            ['name' => 'Admin Phnom Penh', 'password' => bcrypt('password'), 'branch_id' => $pp, 'status' => 'ACTIVE']
+            ['email' => 'admin@example.com'],
+            ['name' => 'Admin Phnom Penh', 'password' => bcrypt('1234'), 'branch_id' => $pp, 'status' => 'ACTIVE']
         );
         $admin->syncRoles(['Admin']);
 
         $dist = User::updateOrCreate(
-            ['email' => 'dist.dp@hq.local'],
-            ['name' => 'Distributor Daun Penh', 'password' => bcrypt('password'), 'branch_id' => $dp, 'status' => 'ACTIVE']
+            ['email' => 'dis@example.com'],
+            ['name' => 'Distributor Daun Penh', 'password' => bcrypt('1234'), 'branch_id' => $dp, 'status' => 'ACTIVE']
         );
         $dist->syncRoles(['Distributor']);
     }

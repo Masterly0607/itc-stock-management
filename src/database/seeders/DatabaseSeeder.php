@@ -16,11 +16,12 @@ class DatabaseSeeder extends Seeder
             UsersSeeder::class,
             CategoriesSeeder::class,
             UnitsSeeder::class,
-            ProductsSeeder::class,
             SuppliersSeeder::class,
+            ProductsSeeder::class,
+
             PricesSeeder::class,
             StockLevelsSeeder::class,
-            DemoScenarioSeeder::class, // optional but useful for screenshots
+
         ]);
     }
 }

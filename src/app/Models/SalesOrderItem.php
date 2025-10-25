@@ -9,15 +9,18 @@ class SalesOrderItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['sales_order_id', 'product_id', 'unit_id', 'qty', 'unit_price', 'line_total'];
-
+    protected $fillable = [
+        'sales_order_id',
+        'product_id',
+        'unit_id',
+        'qty',
+        'unit_price',
+        'line_total',
+    ];
     protected $casts = [
-        'sales_order_id' => 'integer',
-        'product_id'     => 'integer',
-        'unit_id'        => 'integer',
-        'qty'            => 'decimal:2',
-        'unit_price'     => 'decimal:2',
-        'line_total'     => 'decimal:2',
+        'qty'        => 'decimal:3',
+        'unit_price' => 'decimal:2',
+        'line_total' => 'decimal:2',
     ];
 
     public function salesOrder()

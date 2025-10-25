@@ -9,16 +9,21 @@ class Price extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['product_id', 'province_id', 'unit_id', 'price', 'currency', 'starts_at', 'ends_at', 'is_active'];
-
+    protected $fillable = [
+        'product_id',
+        'province_id',
+        'unit_id',
+        'price',
+        'currency',
+        'starts_at',
+        'ends_at',
+        'is_active',
+    ];
     protected $casts = [
-        'product_id'  => 'integer',
-        'province_id' => 'integer',
-        'unit_id'     => 'integer',
-        'price'       => 'decimal:2',
-        'is_active'   => 'boolean',
-        'starts_at'   => 'datetime',
-        'ends_at'     => 'datetime',
+        'price' => 'decimal:2',
+        'starts_at' => 'datetime',
+        'ends_at' => 'datetime',
+        'is_active' => 'bool',
     ];
 
     public function product()

@@ -51,4 +51,18 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Branch::class);
     }
+
+    // useful inverse relations
+    public function createdStockCounts()
+    {
+        return $this->hasMany(StockCount::class, 'created_by');
+    }
+    public function paymentsReceived()
+    {
+        return $this->hasMany(Payment::class, 'received_by');
+    }
+    public function postedLedgers()
+    {
+        return $this->hasMany(InventoryLedger::class, 'posted_by');
+    }
 }

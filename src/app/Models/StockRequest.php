@@ -9,15 +9,13 @@ class StockRequest extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['requested_by_user_id', 'request_branch_id', 'source_branch_id', 'status', 'requested_at', 'approved_at', 'approved_by'];
-
-    protected $casts = [
-        'requested_by_user_id' => 'integer',
-        'request_branch_id'    => 'integer',
-        'source_branch_id'     => 'integer',
-        'approved_by'          => 'integer',
-        'requested_at'         => 'datetime',
-        'approved_at'          => 'datetime',
+    // status: PENDING|APPROVED|REJECTED|CANCELLED|FULFILLED
+    protected $fillable = [
+        'requested_by_user_id',
+        'request_branch_id',
+        'source_branch_id',
+        'status',
+        'note',
     ];
 
     public function requester()
@@ -35,5 +33,9 @@ class StockRequest extends Model
     public function items()
     {
         return $this->hasMany(StockRequestItem::class);
+    }
+    public function transfer()
+    {
+        return $this->hasOne(Transfer::class);
     }
 }
