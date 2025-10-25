@@ -43,8 +43,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'status' => 'boolean',
-            'branch_id' => 'integer',
+            // 'status' => 'boolean',
+            // 'branch_id' => 'integer',
         ];
     }
     public function branch()

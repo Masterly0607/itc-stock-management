@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Http\Middleware\EnsureUserAndBranchActive;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -27,8 +28,9 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->renderHook('panels::auth.login.form.after', fn() => view('auth.inactive-alert'))
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Green,
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
@@ -50,9 +52,15 @@ class AdminPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+
             ])
+            ->authGuard('web')
+            // Runs ONLY for authenticated Filament routes
+            // What is middleware? => is like a security guard that checks something before letting you into a route (page or API).
+
             ->authMiddleware([
-                Authenticate::class,
+                Authenticate::class, // Laravel’s default middleware “is user logged in?” check
+                EnsureUserAndBranchActive::class, // Custom middleware to check if user and branch are active
             ]);
     }
 }

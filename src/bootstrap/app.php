@@ -11,9 +11,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // alias() → gives you a short name (for later use if needed)
-
-
+        $middleware->alias([
+            'active.user.branch' => \App\Http\Middleware\EnsureUserAndBranchActive::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
