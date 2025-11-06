@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Ledger;
 
-use App\Models\{Product, StockLevel, Branch};
+use App\Models\StockLevel;
 use App\Services\LedgerWriter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -14,10 +14,8 @@ class IsIdempotentTest extends TestCase
 
   public function test_prevents_duplicate_posting_for_same_source_keys(): void
   {
-    $this->seed();
-
-    $b = Branch::query()->firstOrFail();
-    $p = Product::query()->firstOrFail();
+    $b = $this->makeBranch('HQ', 'HQ', 'HQ2');
+    $p = $this->makeProduct('Soap');
 
     StockLevel::updateOrCreate(
       ['branch_id' => $b->id, 'product_id' => $p->id],
@@ -37,6 +35,7 @@ class IsIdempotentTest extends TestCase
     ];
 
     $svc->post($payload);
+
     $this->expectException(ValidationException::class);
     $svc->post($payload);
   }

@@ -9,33 +9,35 @@ class StockRequest extends Model
 {
     use HasFactory;
 
-    // status: PENDING|APPROVED|REJECTED|CANCELLED|FULFILLED
     protected $fillable = [
-        'requested_by_user_id',
         'request_branch_id',
-        'source_branch_id',
+        'supply_branch_id',
         'status',
+        'ref_no',
         'note',
+        'submitted_at',
+        'submitted_by',
+        'approved_at',
+        'approved_by',
     ];
 
-    public function requester()
-    {
-        return $this->belongsTo(User::class, 'requested_by_user_id');
-    }
-    public function requestBranch()
-    {
-        return $this->belongsTo(Branch::class, 'request_branch_id');
-    }
-    public function sourceBranch()
-    {
-        return $this->belongsTo(Branch::class, 'source_branch_id');
-    }
     public function items()
     {
         return $this->hasMany(StockRequestItem::class);
     }
-    public function transfer()
+
+    public function lines()
     {
-        return $this->hasOne(Transfer::class);
+        return $this->items();
+    }
+
+    public function requestBranch()
+    {
+        return $this->belongsTo(Branch::class, 'request_branch_id');
+    }
+
+    public function supplyBranch()
+    {
+        return $this->belongsTo(Branch::class, 'supply_branch_id');
     }
 }

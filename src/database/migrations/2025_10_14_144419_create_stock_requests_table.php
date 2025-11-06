@@ -4,27 +4,32 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
-    /**
-     * Run the migrations.
-     */
+return new class extends Migration {
     public function up(): void
     {
-        Schema::create('stock_requests', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('requested_by_user_id')->constrained('users')->restrictOnDelete();
-            $table->foreignId('request_branch_id')->constrained('branches')->restrictOnDelete();
-            $table->foreignId('source_branch_id')->constrained('branches')->restrictOnDelete(); // HQ/Admin
-            $table->enum('status', ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'FULFILLED'])->default('PENDING');
-            $table->text('note')->nullable();
-            $table->timestamps();
+        Schema::create('stock_requests', function (Blueprint $t) {
+            $t->id();
+            // who needs stock
+            $t->foreignId('request_branch_id')->constrained('branches')->restrictOnDelete();
+            // who will supply (HQ) — keep nullable; you can set default HQ in app logic
+            $t->foreignId('supply_branch_id')->nullable()->constrained('branches')->nullOnDelete();
+
+            $t->enum('status', ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'CANCELLED'])->default('DRAFT');
+            $t->string('ref_no')->nullable();
+            $t->text('note')->nullable();
+
+            $t->timestamp('submitted_at')->nullable();
+            $t->foreignId('submitted_by')->nullable()->constrained('users')->nullOnDelete();
+
+            $t->timestamp('approved_at')->nullable();
+            $t->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
+
+            $t->timestamps();
+
+            $t->index(['request_branch_id', 'status']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('stock_requests');

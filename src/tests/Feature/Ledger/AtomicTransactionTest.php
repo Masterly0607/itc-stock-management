@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Ledger;
 
-use App\Models\{Product, StockLevel, Branch};
+use App\Models\StockLevel;
 use App\Services\LedgerWriter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -14,10 +14,8 @@ class AtomicTransactionTest extends TestCase
 
   public function test_keeps_all_or_nothing_with_transactions(): void
   {
-    $this->seed();
-
-    $b = Branch::query()->firstOrFail();
-    $p = Product::query()->firstOrFail();
+    $b = $this->makeBranch('HQ', 'HQ', 'HQ3');
+    $p = $this->makeProduct('Lotion');
 
     StockLevel::updateOrCreate(
       ['branch_id' => $b->id, 'product_id' => $p->id],
@@ -39,7 +37,7 @@ class AtomicTransactionTest extends TestCase
         throw new \Exception('simulate crash');
       });
     } catch (\Throwable $e) {
-      // swallow to continue assertions
+      // swallow
     }
 
     $level = StockLevel::where([
@@ -47,6 +45,6 @@ class AtomicTransactionTest extends TestCase
       'product_id' => $p->id,
     ])->firstOrFail();
 
-    $this->assertSame(50.0, (float)$level->qty);
+    $this->assertSame(50.0, (float) $level->qty);
   }
 }
