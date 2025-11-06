@@ -14,7 +14,12 @@ class Branch extends Model
 
     protected $casts = [
         'is_active' => 'bool',
+        'deactivated_at' => 'datetime',
     ];
+    public function scopeActive($q)
+    {
+        return $q->where('is_active', true);
+    }
 
     public function province()
     {

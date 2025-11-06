@@ -45,7 +45,12 @@ class User extends Authenticatable
             'password' => 'hashed',
             // 'status' => 'boolean',
             // 'branch_id' => 'integer',
+            'is_active' => 'boolean',
         ];
+    }
+    public function scopeActive($q)
+    {
+        return $q->where('is_active', true);
     }
     public function branch()
     {
