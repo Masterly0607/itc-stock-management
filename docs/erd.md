@@ -1,239 +1,216 @@
-# ITC Stock Management System — Phase 2: System Design
-
-> Tech: **Laravel 12 + Filament • MySQL • Spatie Roles + Policies • Single Filament Panel**  
-> Scope anchors: **Branch-scoped • Stock Ledger as truth • No negative stock • Pay-before-Deliver**
+# 🟦 Phase 2 – System Design
+Design plan for the **Stock Management System (ITC Internship Project)** based on the approved Phase 1 Scope.
 
 ---
 
-## 1. Inputs (from Phase 1)
-- Roles: **Super Admin**, **Admin (Branch Manager)**, **Distributor**  
-- Modules: Branches, Users/Roles, Distributors, Products/Categories (global), Purchases (IN), Orders (OUT), Transfers, Stock Counts, Adjustments/Returns, Stock Ledger, Reports, Settings, Audit Log  
-- Rules: Branch-scoped access, No Negative Stock, Pay-before-Deliver, Ledger append-only  
-- Location master: **Provinces**, **Districts**
+## 1. Architecture
+- **Framework:** Laravel + Filament 3 (Admin Panel)  
+- **Auth / RBAC:** Laravel + Spatie Permissions  
+- **Database:** MySQL (InnoDB, utf8mb4)  
+- **Pattern:** Transactional posting → `inventory_ledger` and `stock_levels`  
+- **Isolation:** All queries scoped by branch/role  
 
 ---
 
-## 2. Entity List (Tables)
-- **provinces**  
-- **districts**  
-- **branches**  
-- **users** (+ Spatie tables)  
-- **product_categories**  
-- **products**  
-- **distributors**  
-- **suppliers** (for purchases)  
-- **purchase_orders**, **purchase_items**  
-- **sales_orders**, **order_items**  
-- **payments**  
-- **transfers**, **transfer_items**  
-- **stock_counts**, **stock_count_items**  
-- **stock_adjustments**  
-- **stock_ledger** (append-only)  
-- **stock_levels** (cache)  
-- **audit_logs**  
-- **settings**
-
----
-
-## 3. Full ERD
-```mermaid
-erDiagram
-  PROVINCES ||--o{ DISTRICTS : has
-  PROVINCES ||--o{ BRANCHES : located_in
-  DISTRICTS ||--o{ BRANCHES : located_in
-  PROVINCES ||--o{ DISTRIBUTORS : located_in
-  DISTRICTS ||--o{ DISTRIBUTORS : located_in
-
-  BRANCHES ||--o{ USERS : has
-  BRANCHES ||--o{ DISTRIBUTORS : manages
-  BRANCHES ||--o{ SALES_ORDERS : has
-  BRANCHES ||--o{ PURCHASE_ORDERS : has
-  BRANCHES ||--o{ TRANSFERS : from_or_to
-  BRANCHES ||--o{ STOCK_LEDGER : logs
-  BRANCHES ||--o{ STOCK_LEVELS : aggregates
-
-  PRODUCTS ||--o{ ORDER_ITEMS : used
-  PRODUCTS ||--o{ PURCHASE_ITEMS : used
-  PRODUCTS ||--o{ TRANSFER_ITEMS : moved
-  PRODUCTS ||--o{ STOCK_LEDGER : logs
-  PRODUCTS ||--o{ STOCK_LEVELS : aggregates
-  PRODUCTS }o--|| PRODUCT_CATEGORIES : in
-
-  SALES_ORDERS ||--o{ ORDER_ITEMS : contain
-  PURCHASE_ORDERS ||--o{ PURCHASE_ITEMS : contain
-  TRANSFERS ||--o{ TRANSFER_ITEMS : contain
-
-  SALES_ORDERS ||--o{ PAYMENTS : receives
-  PURCHASE_ORDERS ||--o{ PAYMENTS : pays
-
-  STOCK_COUNTS ||--o{ STOCK_COUNT_ITEMS : contain
-  STOCK_ADJUSTMENTS ||--o{ STOCK_LEDGER : posts
-
-  USERS ||--o{ AUDIT_LOGS : acts
+## 2. Entity Relationship Diagram (ERD Concept)
 ```
-> If ERD fails to render on GitHub, ensure the repository has Mermaid enabled (GitHub supports Mermaid in Markdown by default).
+Province 1-* District  
+Province 1-* Branch (province branch = district NULL)  
+District 1-* Branch (district branch)  
+Branch 1-* User  
 
----
+Category 1-* Product  
+Product 1-* Price (global or province)  
+Unit 1-* ProductUnit (optional)  
 
-## 4. Table Sketches (Columns & Keys)
-- **provinces**: id, name UNIQUE, code?, timestamps  
-- **districts**: id, province_id(FK), name, code?, timestamps  
-- **branches**: id, name, code UNIQUE, province_id?, district_id?, address?, is_active, timestamps  
-- **users**: id, name, email, password, branch_id?(FK), phone?, timestamps  
-- **product_categories**: id, name, slug, timestamps  
-- **products**: id, sku UNIQUE, name, category_id?(FK), unit, base_price?, min_stock, is_active, timestamps  
-- **distributors**: id, branch_id(FK), name, phone?, email?, province_id?, district_id?, address?, timestamps  
-- **suppliers**: id, name, phone?, email?, address?, timestamps  
-- **purchase_orders**: id, branch_id(FK), supplier_id(FK), po_no UNIQUE, status, totals, received_at?, notes?, timestamps  
-- **purchase_items**: id, purchase_order_id(FK), product_id(FK), qty, unit_cost, line_total  
-- **sales_orders**: id, branch_id(FK), customer_id?(FK distributors), so_no UNIQUE, status, payment_status, delivery_status, totals, confirmed_at?, fulfilled_at?, notes?, timestamps  
-- **order_items**: id, sales_order_id(FK), product_id(FK), qty, unit_price, line_total  
-- **payments**: id, order_type(sale|purchase), order_id, branch_id(FK), amount, method, paid_at, ref_no?, notes?  
-- **transfers**: id, from_branch_id, to_branch_id, tr_no UNIQUE, status, shipped_at?, received_at?, notes?, timestamps  
-- **transfer_items**: id, transfer_id(FK), product_id(FK), qty  
-- **stock_counts**: id, branch_id(FK), count_no UNIQUE, status, counted_at?, notes?, timestamps  
-- **stock_count_items**: id, stock_count_id(FK), product_id(FK), qty_found  
-- **stock_adjustments**: id, branch_id(FK), product_id(FK), reason, qty_delta, notes?, approved_by?, adjusted_at, timestamps  
-- **stock_ledger**: id, branch_id(FK), product_id(FK), ref_type, ref_id, qty_in, qty_out, unit_cost?, occurred_at, created_by?, notes?, timestamps  
-- **stock_levels**: PK(branch_id, product_id), qty_current  
-- **audit_logs**: id, actor_id(FK users), action, target_type, target_id, before_json?, after_json?, ip?, created_at  
-- **settings**: key UNIQUE, value  
+Supplier 1-* PurchaseOrder  
+PurchaseOrder 1-* PurchaseOrderItem  
 
----
-
-## 5. Invariants & Policies
-- **No Negative Stock** → check before posting OUT ledger rows  
-- **Pay-before-Deliver** → cannot deliver sales order until paid in full  
-- **Branch Scoping** → all queries filtered by branch_id unless super_admin  
-- **Ledger Immutable** → append-only; corrections via adjustments  
-- **Transfers Double-Entry** → OUT from source branch, IN to target branch  
-
----
-
-## 6. Core Flows (Activity Diagrams)
-
-### Purchase IN
-```mermaid
-flowchart LR
-  A[Create PO] --> B[Approve]
-  B --> C[Receive]
-  C --> L[Ledger qty_in]
-  L --> S[Stock updated]
-  S --> P[Optional Payment]
-```
-
-### Sales OUT Pay Before Deliver
-```mermaid
-flowchart LR
-  A[Create SO] --> B[Confirm]
-  B --> C{Stock OK?}
-  C -- No --> A
-  C -- Yes --> P[Record Payment]
-  P --> D{Paid In Full?}
-  D -- No --> W[Wait]
-  D -- Yes --> X[Deliver]
-  X --> L[Ledger qty_out]
-  L --> S[Stock updated]
-```
-
-### Transfer A To B
-```mermaid
-flowchart LR
-  A[Create Transfer] --> B[Approve]
-  B --> SH[Ship From]
-  SH --> L1[Ledger OUT From]
-  SH --> RV[Receive To]
-  RV --> L2[Ledger IN To]
-  L1 --> S[Stock updated]
-  L2 --> S
-```
-
-### Stock Count Variance
-```mermaid
-flowchart LR
-  A[Draft Count] --> B[Enter qty_found]
-  B --> C[Post Variance]
-  C --> L[Ledger Plus Or Minus]
-  L --> S[Stock updated]
-```
-
-### Adjustment
-```mermaid
-flowchart LR
-  A[Record Adjustment] --> L[Ledger Plus Or Minus]
-  L --> S[Stock updated]
+Branch - Product → StockLevel  
+StockRequest 1-* StockRequestItem  
+Transfer 1-* TransferItem  
+SalesOrder 1-* SalesOrderItem  
+SalesOrder 1-* Payment  
+Adjustment 1-* AdjustmentItem  
+InventoryLedger (polymorphic to any posted doc)
 ```
 
 ---
 
-## 7. Sequence: Pay Before Deliver
-```mermaid
-sequenceDiagram
-  actor Admin
-  participant UI as Filament
-  participant API as Laravel Controller
-  participant Svc as Service
-  participant DB as MySQL
+## 3. Main Tables (Key Fields)
 
-  Admin->>UI: Click Deliver
-  UI->>API: POST /orders/{id}/deliver
-  API->>Svc: deliverOrder(id)
-  Svc->>DB: sum(payments) for order
-  DB-->>Svc: total_paid
-  alt Not Enough
-    Svc-->>API: Error Pay Before Deliver
-    API-->>UI: Show Error
-  else Paid
-    Svc->>DB: INSERT stock_ledger qty_out
-    Svc->>DB: UPDATE stock_levels
-    DB-->>Svc: ok
-    Svc-->>API: success
-    API-->>UI: Delivered
-  end
-```
+### 3.1 Catalog
+| Table | Key Fields |
+|--------|------------|
+| **categories** | name, code, is_active |
+| **units** | name, symbol, base_ratio |
+| **products** | name, sku, barcode, category_id, brand, unit_base_id, is_active |
+| **prices** | product_id, province_id (nullable), unit_id, price, currency, starts_at, ends_at (nullable), is_active |
 
----
+### 3.2 Location & Branch
+| Table | Key Fields |
+|--------|------------|
+| **provinces** | name, code |
+| **districts** | province_id, name, code |
+| **branches** | name, code, type (HQ / PROVINCE / DISTRICT), province_id, district_id (nullable) |
 
-## 8. Migration Plan
-1. provinces, districts  
-2. branches, users (+Spatie)  
-3. product_categories, products  
-4. distributors, suppliers  
-5. purchase_orders, purchase_items  
-6. sales_orders, order_items  
-7. transfers, transfer_items  
-8. stock_counts, stock_count_items  
-9. stock_adjustments  
-10. payments  
-11. stock_ledger, stock_levels  
-12. audit_logs, settings  
+### 3.3 Users & Roles
+| Table | Key Fields |
+|--------|------------|
+| **users** | name, email, password, branch_id, status |
+| **roles / permissions** | Spatie default tables |
 
----
+### 3.4 Suppliers & Purchasing
+| Table | Key Fields |
+|--------|------------|
+| **suppliers** | name, code, phone, email, tax_id, contact_name, address, is_active |
+| **purchase_orders** | supplier_id, branch_id (dest HQ), po_number, status (DRAFT / ORDERED / RECEIVED / CANCELLED), currency, total_amount, ordered_at, received_at |
+| **purchase_order_items** | purchase_order_id, product_id, unit_id, qty_ordered, qty_received, unit_cost, line_total |
 
-## 9. Filament Resource Plan
-- Branch (CRUD)  
-- Product Category (CRUD)  
-- Product (CRUD)  
-- Distributor (CRUD)  
-- Supplier (CRUD)  
-- Purchase Order (Approve, Receive)  
-- Sales Order (Confirm, Deliver)  
-- Transfer (Approve, Ship, Receive)  
-- Stock Count (Post Variance)  
-- Stock Adjustment (Approve)  
-- Stock Ledger (read-only)  
-- Stock Levels (read-only)  
-- Payments (link to orders)  
-- Audit Log (read-only)  
+### 3.5 Inventory
+| Table | Key Fields |
+|--------|------------|
+| **stock_levels** | branch_id, product_id, unit_id, on_hand, reserved (unique) |
+| **inventory_ledger** | txn_type, txn_id, branch_id, product_id, unit_id, qty_delta, reference, notes, posted_at, posted_by |
+
+### 3.6 Operations
+| Table | Key Fields |
+|--------|------------|
+| **stock_requests** | requested_by_user_id, request_branch_id, source_branch_id, status, requested_at, approved_at, approved_by |
+| **stock_request_items** | stock_request_id, product_id, unit_id, qty_requested, qty_approved |
+| **transfers** | from_branch_id, to_branch_id, status, dispatched_at, received_at, ref_no |
+| **transfer_items** | transfer_id, product_id, unit_id, qty |
+| **sales_orders** | branch_id, customer_name, status, requires_prepayment, total_amount, currency, posted_at, posted_by |
+| **sales_order_items** | sales_order_id, product_id, unit_id, qty, unit_price, line_total |
+| **payments** | sales_order_id, amount, currency, method, paid_at, received_by |
+| **adjustments** | branch_id, reason, status, posted_at, approved_by |
+| **adjustment_items** | adjustment_id, product_id, unit_id, qty_delta, note |
 
 ---
 
-## 10. Exit Checklist
-- [x] Full ERD done  
-- [x] Table sketches done  
-- [x] Rules written  
-- [x] Flows & sequence done  
-- [x] Migration order finalized  
-- [x] Filament plan ready  
+## 4. Workflow / State Machine
+| Document | States | Notes |
+|-----------|---------|-------|
+| **Purchase Order** | DRAFT → ORDERED → RECEIVED → CANCELLED | Receiving posts Ledger IN (PURCHASE) |
+| **Stock Request** | PENDING → APPROVED / REJECTED / CANCELLED | Approval creates Transfer (DRAFT) |
+| **Transfer** | DRAFT → DISPATCHED → RECEIVED → CANCELLED | Stock out/in + ledger |
+| **Sales Order** | DRAFT → POSTED | Delivery only if payment ≥ total |
+| **Adjustment** | DRAFT → POSTED | Direct ± on_hand + ledger |
 
-**Phase 2 complete ✅**
+---
+
+## 5. Posting Logic (Atomic)
+1. **PO Receive (HQ)** → `on_hand += qty` → Ledger IN (PURCHASE)  
+2. **Transfer Dispatch (Source)** → check `on_hand ≥ qty` → `on_hand –= qty` → Ledger OUT  
+3. **Transfer Receive (Destination)** → `on_hand += qty` → Ledger IN  
+4. **Sales Delivery (Distributor)** → if paid enough → `on_hand –= qty` → Ledger OUT (SALE)  
+5. **Adjustment Post** → apply `qty_delta` (±) → Ledger ADJUST  
+
+_All wrapped in DB transactions._
+
+---
+
+## 6. Permissions & Scoping
+| Action | Super Admin | Admin (Province) | Distributor (District) |
+|--------|--------------|------------------|------------------------|
+| Manage Products / Categories | ✅ | ❌ | ❌ |
+| Manage Suppliers / POs | ✅ (HQ) | ❌ | ❌ |
+| CRUD Users | ✅ (Admin + Distributor) | ✅ (Distributors in own province) | ❌ |
+| View Data | All branches | Own province | Own district |
+| Approve Stock Request | ✅ | ✅ | ❌ |
+| Create Stock Request | ❌ | ❌ | ✅ |
+| Dispatch / Receive Transfer | ✅ | ✅ (own province) | ✅ (receive own) |
+| Sales & Payments | View all | View province | ✅ own |
+| Adjustments | ✅ | ✅ | ✅ (limited) |
+
+**Query Rules**
+- Super Admin → no filter  
+- Admin → `province_id`  
+- Distributor → `branch_id`
+
+---
+
+## 7. Filament Resources (MVP)
+- **Catalog:** Category, Product (+Prices), Unit  
+- **Location:** Province, District, Branch  
+- **Users:** UserResource (auto assign branch by role)  
+- **Purchasing:** Supplier, Purchase Order  
+- **Operations:** StockRequest, Transfer, SalesOrder, Payment, Adjustment  
+- **Reports:** Stock On Hand, Ledger, Sales Summary  
+
+---
+
+## 8. Validation Rules
+- No negative stock  
+- One Admin branch per province  
+- Unique (branch, product, unit) for stock  
+- No overlapping prices for same product / unit / province  
+- Posted docs immutable  
+- PO receive only once per item (unless partial)  
+
+---
+
+## 9. Indexes & Performance
+- `stock_levels(branch_id, product_id, unit_id)` UNIQUE  
+- `inventory_ledger(branch_id, product_id, posted_at)` INDEX  
+- `purchase_orders(supplier_id, branch_id)` INDEX  
+- Foreign keys auto-indexed  
+- Branch / type filters indexed for Filament queries  
+
+---
+
+## 10. Migration Order
+1. Provinces, Districts, Branches  
+2. Users (+ Roles / Permissions)  
+3. Categories, Units, Products, Prices  
+4. **Suppliers + Purchase Orders + Items**  
+5. Stock Levels  
+6. Stock Requests + Items  
+7. Transfers + Items  
+8. Sales Orders + Items + Payments  
+9. Adjustments + Items  
+10. Inventory Ledger  
+
+---
+
+## 11. Core Sequences
+**A) Create Distributor**  
+- Admin creates user → role = Distributor  
+- Province auto-filled, district restricted to province  
+- System sets `branch_id` to district branch  
+
+**B) Purchase Order → Receive (HQ)**  
+- Super Admin creates PO → Supplier  
+- When received → HQ stock increases → Ledger IN (PURCHASE)
+
+**C) Request → Approve → Transfer**  
+- Distributor requests stock  
+- Admin approves → Transfer created  
+- Dispatch = stock out (source)  
+- Receive = stock in (dest)  
+
+**D) Sales with Pay-Before-Deliver**  
+- Distributor creates Sales Order  
+- Records Payment  
+- If paid enough → Deliver → Stock - Qty  
+
+**E) Adjustment**  
+- Draft items ± qty  
+- Post → Update stock + ledger  
+
+---
+
+## 12. Acceptance Checklist (Phase 2)
+✅ ERD complete and approved  
+✅ Tables and keys defined  
+✅ Posting logic documented  
+✅ Permissions matrix matches scope  
+✅ Index plan ready  
+✅ Resources mapped for Filament  
+➡️ Ready for **Phase 3 – Database & Seeding**
+
+---
+
+**Project:** Stock Management System (ITC Internship Project)  
+**Phase:** 2 – System Design  
+**Author:** Sok Masterly
