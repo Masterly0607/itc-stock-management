@@ -13,9 +13,11 @@ return new class extends Migration
     {
         Schema::create('stock_counts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('branch_id')->constrained('branches')->restrictOnDelete();
-            $table->enum('status', ['DRAFT', 'POSTED'])->default('DRAFT');
-            $table->foreignId('created_by')->constrained('users')->restrictOnDelete();
+            $table->foreignId('branch_id')->constrained()->cascadeOnDelete();
+            $table->string('status')->default('DRAFT');
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('posted_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('posted_at')->nullable();
             $table->timestamps();
         });
     }

@@ -3,23 +3,28 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class StockCount extends Model
 {
-    use HasFactory;
+    protected $fillable = [
+        'branch_id',
+        'status',      // DRAFT | POSTED (or whatever you use)
+        'created_by',
+        'posted_by',
+        'posted_at',
+    ];
 
-    // status: DRAFT|POSTED
-    protected $fillable = ['branch_id', 'status', 'created_by'];
+    protected $casts = [
+        'posted_at' => 'datetime',
+    ];
 
+    // REQUIRED by the Filament Select
     public function branch()
     {
         return $this->belongsTo(Branch::class);
     }
-    public function creator()
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
+
+    // REQUIRED by the Filament Repeater
     public function items()
     {
         return $this->hasMany(StockCountItem::class);

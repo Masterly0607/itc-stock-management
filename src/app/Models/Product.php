@@ -22,6 +22,11 @@ class Product extends Model
     ];
     protected $casts = ['is_active' => 'bool'];
 
+    public function baseUnit()
+    {
+        return $this->belongsTo(\App\Models\Unit::class, 'base_unit_id');
+    }
+
     public function category()
     {
         return $this->belongsTo(Category::class);

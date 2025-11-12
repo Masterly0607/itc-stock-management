@@ -9,17 +9,24 @@ return new class extends Migration {
     {
         Schema::create('adjustments', function (Blueprint $table) {
             $table->id();
+
+            // which branch the adjustment affects
             $table->foreignId('branch_id')->constrained('branches')->restrictOnDelete();
 
-            $table->enum('reason', ['DAMAGE', 'EXPIRE', 'MANUAL']);
+            // free-text reason (no ENUM truncation issues)
+            $table->string('reason', 255)->nullable();
+
+            // workflow
             $table->enum('status', ['DRAFT', 'POSTED'])->default('DRAFT');
 
-            $table->string('ref_no')->nullable();        // ← added (optional reference)
+            // bookkeeping / governance
+            $table->string('ref_no')->nullable();
             $table->timestamp('posted_at')->nullable();
             $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete(); // ← optional
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
 
             $table->timestamps();
+
             $table->index(['branch_id', 'status']);
         });
     }

@@ -12,17 +12,17 @@ return new class extends Migration {
             $table->foreignId('branch_id')->constrained('branches')->restrictOnDelete();
 
             $table->string('customer_name');
-            $table->enum('status', ['DRAFT', 'CONFIRMED', 'PAID', 'DELIVERED', 'CANCELLED'])->default('DRAFT');
 
-            // Pay-before-deliver support
+            // simple & future-proof
+            $table->string('status', 20)->default('DRAFT');
+
             $table->boolean('requires_prepayment')->default(true);
             $table->decimal('total_amount', 12, 2)->default(0);
-            $table->decimal('paid_amount', 12, 2)->default(0); // ← added
+            $table->decimal('paid_amount', 12, 2)->default(0);
 
             $table->string('currency', 3)->default('USD');
 
-            // Operational timestamps
-            $table->timestamp('delivered_at')->nullable(); // ← added
+            $table->timestamp('delivered_at')->nullable();
             $table->timestamp('posted_at')->nullable();
             $table->foreignId('posted_by')->nullable()->constrained('users')->nullOnDelete();
 

@@ -40,4 +40,16 @@ class StockRequest extends Model
     {
         return $this->belongsTo(Branch::class, 'supply_branch_id');
     }
+    public function submitter()
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+    protected $casts = [
+        'submitted_at' => 'datetime',
+        'approved_at'  => 'datetime',
+    ];
 }

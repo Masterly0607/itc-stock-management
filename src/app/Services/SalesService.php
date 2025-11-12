@@ -3,13 +3,36 @@
 namespace App\Services;
 
 use App\Models\SalesOrder;
+use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use DomainException;
 
 class SalesService
 {
   public function __construct(protected LedgerWriter $ledger) {}
+
+  public function post(int $orderId, int $userId): void
+  {
+    DB::transaction(function () use ($orderId, $userId) {
+      /** @var SalesOrder $order */
+      $order = SalesOrder::with('items', 'payments')->lockForUpdate()->findOrFail($orderId);
+
+      if ($order->status !== 'DRAFT') {
+        throw new \Exception('Only draft orders can be posted.');
+      }
+      if ($order->items->isEmpty()) {
+        throw new \Exception('Order has no items.');
+      }
+
+      $order->recalcTotals();
+
+      $order->update([
+        'status'     => 'POSTED',
+        'posted_by'  => $userId,
+        'posted_at'  => now(),
+      ]);
+    });
+  }
 
   public function confirm(SalesOrder $order): SalesOrder
   {
@@ -17,10 +40,8 @@ class SalesService
       throw new DomainException('Only DRAFT orders can be confirmed.');
     }
 
-    $total = $order->items()->sum('line_total');
-
     $order->update([
-      'total_amount' => $total,
+      'total_amount' => (float) $order->items()->sum('line_total'),
       'status'       => 'CONFIRMED',
     ]);
 
@@ -29,174 +50,123 @@ class SalesService
 
   public function addPayment(SalesOrder $order, float $amount, string $method = 'CASH')
   {
-    if (!in_array($order->status, ['CONFIRMED', 'PAID'])) {
-      throw new DomainException('Order must be CONFIRMED or PAID to receive payments.');
+    if (! in_array($order->status, ['CONFIRMED', 'POSTED', 'PAID'], true)) {
+      throw new DomainException('Order must be CONFIRMED, POSTED or PAID to receive payments.');
     }
 
-    $payment = $order->payments()->create([
+    return $order->payments()->create([
       'amount'      => $amount,
       'currency'    => $order->currency ?? 'USD',
       'method'      => $method,
       'received_at' => now(),
+      'received_by' => auth()->id(),
     ]);
-
-    $paid = (float) $order->payments()->sum('amount');
-    if ($paid + 0.0001 >= (float) $order->total_amount) {
-      $order->update(['status' => 'PAID']);
-    }
-
-    return $payment;
   }
 
   public function deliver(SalesOrder $order, ?int $userId = null): SalesOrder
   {
-    // ------------------------------
-    // Phase 13 governance hard guards
-    // ------------------------------
+    $order->refresh()->loadMissing('items', 'payments');
+    $order->recalcTotals();
 
-    // Branch active?
+    // Pay-before-deliver only when required
+    if ($order->requires_prepayment && ! $order->is_paid) {
+      throw new DomainException('Pay-before-deliver: order is not PAID.');
+    }
+
+    // Branch active governance
     if (Schema::hasColumn('branches', 'is_active')) {
       $active = DB::table('branches')->where('id', $order->branch_id)->value('is_active');
-      if ($active !== null && (int)$active === 0) {
-        throw new DomainException('Branch is inactive.');
-      }
+      if ($active !== null && (int)$active === 0) throw new DomainException('Branch is inactive.');
     } elseif (Schema::hasColumn('branches', 'status')) {
       $status = DB::table('branches')->where('id', $order->branch_id)->value('status');
-      if (is_string($status) && strtoupper($status) === 'INACTIVE') {
-        throw new DomainException('Branch is inactive.');
-      }
+      if (is_string($status) && strtoupper($status) === 'INACTIVE') throw new DomainException('Branch is inactive.');
     }
-    // --- User active check (supports actingAs + many schema styles) ---
-    $userId = $userId ?? (auth()->check() ? auth()->id() : null);
 
+    // *** User active governance (required by the failing test) ***
+    $userId = $userId ?? (auth()->check() ? auth()->id() : null);
     if ($userId) {
       $user = DB::table('users')->where('id', $userId)->first();
-
       if ($user) {
-        // Soft-deleted => inactive
+        // soft-deleted?
         if (Schema::hasColumn('users', 'deleted_at') && $user->deleted_at !== null) {
           throw new DomainException('User is inactive.');
         }
-
         $inactive = false;
-
-        $isInactiveBool = function ($val): bool {
-          // Treat falsey / 0 / '0' as inactive
-          return $val === false || $val === 0 || $val === '0' || $val === null;
-        };
-
-        $isInactiveStatus = function ($val): bool {
-          if (is_numeric($val)) {
-            return (int)$val === 0;
-          }
-          $v = strtoupper((string)$val);
+        $falsy = fn($v) => $v === false || $v === 0 || $v === '0' || $v === null;
+        $isInactiveStatus = function ($v): bool {
+          if (is_numeric($v)) return (int)$v === 0;
+          $v = strtoupper((string)$v);
           return in_array($v, ['INACTIVE', 'DISABLED', 'DEACTIVATED', 'SUSPENDED', 'BLOCKED', 'BANNED'], true);
         };
-
-        // Common boolean flags
-        if (!$inactive && Schema::hasColumn('users', 'is_active') && isset($user->is_active)) {
-          $inactive = $isInactiveBool($user->is_active);
+        foreach (['is_active', 'active', 'enabled', 'is_enabled'] as $col) {
+          if (!$inactive && Schema::hasColumn('users', $col) && isset($user->{$col})) {
+            $inactive = $falsy($user->{$col});
+          }
         }
-        if (!$inactive && Schema::hasColumn('users', 'active') && isset($user->active)) {
-          $inactive = $isInactiveBool($user->active);
+        foreach (['status', 'state'] as $col) {
+          if (!$inactive && Schema::hasColumn('users', $col) && isset($user->{$col})) {
+            $inactive = $isInactiveStatus($user->{$col});
+          }
         }
-        if (!$inactive && Schema::hasColumn('users', 'enabled') && isset($user->enabled)) {
-          $inactive = $isInactiveBool($user->enabled);
-        }
-        if (!$inactive && Schema::hasColumn('users', 'is_enabled') && isset($user->is_enabled)) {
-          $inactive = $isInactiveBool($user->is_enabled);
-        }
-
-        // String or numeric status/state fields
-        if (!$inactive && Schema::hasColumn('users', 'status') && isset($user->status)) {
-          $inactive = $isInactiveStatus($user->status);
-        }
-        if (!$inactive && Schema::hasColumn('users', 'state') && isset($user->state)) {
-          $inactive = $isInactiveStatus($user->state);
-        }
-
         if ($inactive) {
           throw new DomainException('User is inactive.');
         }
       }
     }
 
-
-    // Pay-before-deliver rule
-    if ($order->status !== 'PAID') {
-      throw new DomainException('Pay-before-deliver: order is not PAID.');
-    }
-
     // Idempotency
-    if ($order->posted_at || $order->status === 'DELIVERED') {
+    if ($order->delivered_at || $order->status === 'DELIVERED') {
       throw new DomainException('Order already delivered.');
     }
 
-    $lines = $order->items()->get();
+    // Availability (qty/on_hand)
+    $qtyCol = Schema::hasColumn('stock_levels', 'qty') ? 'qty'
+      : (Schema::hasColumn('stock_levels', 'on_hand') ? 'on_hand' : null);
+    if (!$qtyCol) throw new DomainException('stock_levels has no qty/on_hand column.');
 
-    // Check availability (supports either `on_hand` or `qty` schema)
-    foreach ($lines as $line) {
+    foreach ($order->items as $line) {
       $where = [
         'branch_id'  => $order->branch_id,
         'product_id' => $line->product_id,
       ];
-      if (Schema::hasColumn('stock_levels', 'unit_id') && !is_null($line->unit_id)) {
+      if (Schema::hasColumn('stock_levels', 'unit_id') && $line->unit_id) {
         $where['unit_id'] = $line->unit_id;
       }
-
-      $available = null;
-      if (Schema::hasColumn('stock_levels', 'on_hand')) {
-        $available = (float) (DB::table('stock_levels')->where($where)->value('on_hand') ?? 0);
-      } else {
-        $available = (float) (DB::table('stock_levels')->where($where)->value('qty') ?? 0);
-      }
-
+      $available = (float) (DB::table('stock_levels')->where($where)->value($qtyCol) ?? 0);
       if ($available < (float) $line->qty) {
         throw new DomainException("Insufficient stock for product {$line->product_id}");
       }
     }
 
-    DB::transaction(function () use ($order, $lines, $userId) {
-      foreach ($lines as $line) {
+    DB::transaction(function () use ($order, $userId) {
+      foreach ($order->items as $line) {
         $payload = [
           'product_id'  => $line->product_id,
           'branch_id'   => $order->branch_id,
-          'qty'         => $line->qty,
+          'qty'         => (float)$line->qty,
           'movement'    => 'SALE_OUT',
           'source_type' => 'sales_orders',
           'source_id'   => $order->id,
           'source_line' => $line->id ?? 0,
         ];
-
-        if (Schema::hasColumn('inventory_ledger', 'unit_id') && !is_null($line->unit_id)) {
+        if (Schema::hasColumn('inventory_ledger', 'unit_id') && $line->unit_id) {
           $payload['unit_id'] = $line->unit_id;
         }
-
         $this->ledger->post($payload);
       }
 
       $order->update([
-        'status'    => 'DELIVERED',
-        'posted_at' => now(),
-        'posted_by' => $userId,
+        'status'       => 'DELIVERED',
+        'delivered_at' => now(),
+        'posted_at'    => $order->posted_at ?: now(),
+        'posted_by'    => $userId,
       ]);
 
-      // Audit
       if (class_exists(\App\Services\AuditLogger::class)) {
         \App\Services\AuditLogger::log('sales.delivered', [
           'user_id'     => $userId,
           'entity_type' => 'sales_orders',
           'entity_id'   => $order->id,
-          'payload'     => [
-            'branch_id'    => $order->branch_id,
-            'total_amount' => $order->total_amount,
-            'lines'        => $lines->map(fn($l) => [
-              'product_id' => $l->product_id,
-              'qty'        => $l->qty,
-              'unit_id'    => $l->unit_id,
-              'line_total' => $l->line_total,
-            ])->values(),
-          ],
         ]);
       }
     });

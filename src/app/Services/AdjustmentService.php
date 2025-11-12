@@ -2,51 +2,47 @@
 
 namespace App\Services;
 
+use App\Models\Adjustment;
+use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use DomainException;
 
 class AdjustmentService
 {
   public function __construct(protected LedgerWriter $ledger) {}
 
-  public function post(\App\Models\Adjustment $adjustment, ?int $userId = null): \App\Models\Adjustment
+  public function post(Adjustment $adjustment, ?int $userId = null): Adjustment
   {
-    if ($adjustment->status !== 'DRAFT') {
+    if (($adjustment->status ?? 'DRAFT') !== 'DRAFT') {
       throw new DomainException('Only DRAFT adjustments can be posted.');
     }
     if ($adjustment->posted_at) {
       throw new DomainException('Adjustment already posted.');
     }
 
-    $items = DB::table('adjustment_items')
-      ->where('adjustment_id', $adjustment->id)
-      ->get();
-
+    $items = $adjustment->items()->get();
     if ($items->isEmpty()) {
       throw new DomainException('Adjustment has no items.');
     }
 
-    // Determine stock column name
-    $qtyCol = Schema::hasColumn('stock_levels', 'on_hand') ? 'on_hand'
-      : (Schema::hasColumn('stock_levels', 'qty') ? 'qty'
-        : (Schema::hasColumn('stock_levels', 'quantity') ? 'quantity' : null));
-    if (!$qtyCol) {
-      throw new DomainException('stock_levels has no quantity column (on_hand/qty/quantity).');
-    }
+    // quantity column on stock_levels
+    $qtyCol = Schema::hasColumn('stock_levels', 'qty') ? 'qty'
+      : (Schema::hasColumn('stock_levels', 'on_hand') ? 'on_hand' : null);
+    if (!$qtyCol) throw new DomainException('stock_levels has no qty/on_hand column.');
 
-    // Pre-check negatives
+    // Pre-check negatives for OUT lines
     foreach ($items as $it) {
-      if ((float)$it->qty_delta < 0) {
+      $delta = (float)$it->qty_delta;
+      if ($delta < 0) {
         $where = [
           'branch_id'  => $adjustment->branch_id,
           'product_id' => $it->product_id,
         ];
-        if (Schema::hasColumn('stock_levels', 'unit_id') && !is_null($it->unit_id)) {
+        if (Schema::hasColumn('stock_levels', 'unit_id') && $it->unit_id) {
           $where['unit_id'] = $it->unit_id;
         }
-        $available = (float)(DB::table('stock_levels')->where($where)->value($qtyCol) ?? 0);
-        if ($available + (float)$it->qty_delta < 0) {
+        $available = (float) (DB::table('stock_levels')->where($where)->value($qtyCol) ?? 0);
+        if ($available + $delta < 0) {
           throw new DomainException("Insufficient stock for product {$it->product_id} on adjust-out.");
         }
       }
@@ -66,18 +62,17 @@ class AdjustmentService
           'source_id'   => $adjustment->id,
           'source_line' => $it->id ?? 0,
         ];
-        if (Schema::hasColumn('inventory_ledger', 'unit_id') && !is_null($it->unit_id)) {
+        if (Schema::hasColumn('inventory_ledger', 'unit_id') && $it->unit_id) {
           $payload['unit_id'] = $it->unit_id;
         }
 
         $this->ledger->post($payload);
       }
 
-      DB::table('adjustments')->where('id', $adjustment->id)->update([
-        'status'     => 'POSTED',
-        'posted_at'  => now(),
+      $adjustment->update([
+        'status'      => 'POSTED',
+        'posted_at'   => now(),
         'approved_by' => $userId,
-        'updated_at' => now(),
       ]);
     });
 

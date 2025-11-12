@@ -9,14 +9,14 @@ abstract class BaseResource extends Resource
   /** Control visibility of menu items */
   public static function shouldRegisterNavigation(): bool
   {
-    $u = auth()->user();
-    return $u?->hasAnyRole(['Super Admin']) ?? false;
+    return static::canViewAny();   // ← key change
   }
 
   /** Default permissions — SA only by default */
   public static function canViewAny(): bool
   {
-    return auth()->check();
+    $u = auth()->user();
+    return $u?->hasAnyRole(['Distributor', 'Admin', 'Super Admin']) ?? false;
   }
   public static function canCreate(): bool
   {

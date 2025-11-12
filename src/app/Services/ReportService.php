@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\StockLevel;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Collection;
@@ -115,6 +117,94 @@ class ReportService
       $arr = is_array($row) ? $row : (array)$row;
       fputcsv($fh, $arr);
     }
+    rewind($fh);
+    $csv = stream_get_contents($fh);
+    fclose($fh);
+    return $csv;
+  }
+  public function lowStockQuery(?int $branchId = null, int $threshold = 50): Builder
+  {
+    // Assumes stock_levels has on_hand and (optional) reserved
+    // If your schema is qty/reserved instead, replace on_hand with qty below.
+    return StockLevel::query()
+      ->join('branches', 'branches.id', '=', 'stock_levels.branch_id')
+      ->join('products', 'products.id', '=', 'stock_levels.product_id')
+      ->leftJoin('units', 'units.id', '=', 'stock_levels.unit_id')
+      ->when($branchId, fn($q) => $q->where('stock_levels.branch_id', $branchId))
+      ->selectRaw('
+            stock_levels.id,
+            branches.name  as branch,
+            products.name  as product,
+            COALESCE(units.name, "-") as unit,
+            stock_levels.on_hand      as on_hand,
+            COALESCE(stock_levels.reserved, 0) as reserved,
+            (stock_levels.on_hand - COALESCE(stock_levels.reserved, 0)) as available,
+            ? as threshold
+        ', [$threshold])
+      ->whereRaw('(stock_levels.on_hand - COALESCE(stock_levels.reserved, 0)) < ?', [$threshold])
+      ->orderBy('branches.name')
+      ->orderBy('products.name');
+  }
+
+  public function lowStockCsv(?int $branchId = null, int $threshold = 50): string
+  {
+    $rows = $this->lowStockQuery($branchId, $threshold)->get();
+
+    $fh = fopen('php://temp', 'r+');
+    fputcsv($fh, ['Branch', 'Product', 'Unit', 'On Hand', 'Reserved', 'Available', 'Threshold']);
+    foreach ($rows as $r) {
+      fputcsv($fh, [
+        $r->branch,
+        $r->product,
+        $r->unit,
+        $r->on_hand,
+        $r->reserved,
+        $r->available,
+        $threshold,
+      ]);
+    }
+    rewind($fh);
+    return stream_get_contents($fh);
+  }
+  public function auditLogQuery(?string $from = null, ?string $to = null): \Illuminate\Database\Eloquent\Builder
+  {
+    // Build an Eloquent builder that returns the columns your table expects:
+    // at, user, action, ref, meta
+    return \App\Models\AuditLog::query()
+      ->from('audit_logs as a')
+      ->leftJoin('users as u', 'u.id', '=', 'a.user_id')
+      ->selectRaw('
+            a.id,
+            a.created_at as at,
+            COALESCE(u.name, u.email, "System") as user,
+            a.action,
+            CONCAT(COALESCE(a.entity_type, ""), "#", COALESCE(a.entity_id, "")) as ref,
+            a.payload as meta
+        ')
+      ->when($from, fn($q) => $q->whereDate('a.created_at', '>=', $from))
+      ->when($to,   fn($q) => $q->whereDate('a.created_at', '<=', $to))
+      ->orderByDesc('a.created_at');
+  }
+
+  public function auditCsv(?string $from = null, ?string $to = null): string
+  {
+    $rows = $this->auditLogQuery($from, $to)->get();
+
+    $fh = fopen('php://temp', 'r+');
+    fputcsv($fh, ['Time', 'User', 'Action', 'Ref', 'Details']);
+
+    foreach ($rows as $r) {
+      // $r->meta is the alias of payload
+      $meta = is_array($r->meta) ? json_encode($r->meta) : (string) $r->meta;
+      fputcsv($fh, [
+        (string) $r->at,
+        (string) $r->user,
+        (string) $r->action,
+        (string) $r->ref,
+        $meta,
+      ]);
+    }
+
     rewind($fh);
     $csv = stream_get_contents($fh);
     fclose($fh);

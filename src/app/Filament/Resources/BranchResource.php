@@ -131,6 +131,7 @@ class BranchResource extends BaseResource
             Tables\Columns\IconColumn::make('is_active')->boolean(),
         ])->actions([
             Tables\Actions\EditAction::make(),
+            Tables\Actions\DeleteAction::make(),
         ])->bulkActions([]);
     }
 

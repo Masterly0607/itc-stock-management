@@ -30,4 +30,8 @@ class Transfer extends Model
     {
         return $this->hasMany(TransferItem::class);
     }
+    public function stockRequest()
+    {
+        return $this->belongsTo(StockRequest::class);
+    }
 }
