@@ -23,13 +23,27 @@ class StockCountResource extends BaseResource
 
     public static function canViewAny(): bool
     {
-        $u = auth()->user();
-        return $u?->hasAnyRole(['Admin', 'Super Admin']) ?? false;
+        return auth()->user()?->hasRole('Super Admin') ?? false;
     }
-
     public static function shouldRegisterNavigation(): bool
     {
         return static::canViewAny();
+    }
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->hasRole('Super Admin') ?? false;
+    }
+    public static function canEdit($record): bool
+    {
+        return auth()->user()?->hasRole('Super Admin') ?? false;
+    }
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->hasRole('Super Admin') ?? false;
+    }
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()?->hasRole('Super Admin') ?? false;
     }
 
     public static function form(Form $form): Form
@@ -54,20 +68,19 @@ class StockCountResource extends BaseResource
                 ->disabled($isAdmin),
 
             Repeater::make('items')
-                ->relationship('items') // 👈 be explicit
+                ->relationship('items')
                 ->schema([
                     Select::make('product_id')
                         ->relationship('product', 'name')
-
                         ->required()
                         ->columnSpan(2),
 
                     Select::make('unit_id')
                         ->relationship('unit', 'name')
-
                         ->required()
                         ->columnSpan(1),
 
+                    // 👇 Make this match your DB column (qty_counted).
                     TextInput::make('qty_counted')
                         ->label('Qty counted')
                         ->numeric()
@@ -101,9 +114,13 @@ class StockCountResource extends BaseResource
                     ->color('success')
                     ->visible(fn(StockCount $r) => ($r->status ?? 'DRAFT') === 'DRAFT')
                     ->requiresConfirmation()
-                    ->action(function (StockCount $record) {
+                    ->action(function (StockCount $record, Action $action) {
                         try {
                             app(\App\Services\StockCountService::class)->post($record->id, auth()->id());
+                            // Refresh UI so status flips to POSTED immediately
+                            $record->refresh();
+                            $action->getLivewire()->dispatch('refreshTable');
+
                             \Filament\Notifications\Notification::make()
                                 ->title('Stock Count posted')
                                 ->body('Adjustment created from counted variance.')
@@ -126,7 +143,7 @@ class StockCountResource extends BaseResource
         $q = parent::getEloquentQuery();
         $u = auth()->user();
 
-        if ($u?->hasRole('Admin')) {
+        if ($u?->hasRole('Admin') && $u?->branch_id) {
             return $q->where('branch_id', $u->branch_id);
         }
 

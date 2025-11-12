@@ -28,22 +28,34 @@ class AdjustmentResource extends BaseResource
     protected static ?string $navigationGroup = 'Operations';
     protected static ?int    $navigationSort = 35;
 
+
+
     public static function canViewAny(): bool
     {
-        $u = auth()->user();
-        return $u?->hasAnyRole(['Admin', 'Super Admin']) ?? false;
+        return auth()->user()?->hasRole('Super Admin') ?? false;
     }
-
     public static function shouldRegisterNavigation(): bool
     {
         return static::canViewAny();
     }
-
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->hasRole('Super Admin') ?? false;
+    }
     public static function canEdit($record): bool
     {
-        return ($record->status ?? 'DRAFT') === 'DRAFT'
-            && (auth()->user()?->hasAnyRole(['Admin', 'Super Admin']) ?? false);
+        return auth()->user()?->hasRole('Super Admin') ?? false;
     }
+    public static function canDelete($record): bool
+    {
+        return auth()->user()?->hasRole('Super Admin') ?? false;
+    }
+    public static function canDeleteAny(): bool
+    {
+        return auth()->user()?->hasRole('Super Admin') ?? false;
+    }
+
+
 
     public static function form(Form $form): Form
     {

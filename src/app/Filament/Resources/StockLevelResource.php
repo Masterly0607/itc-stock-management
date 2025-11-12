@@ -14,7 +14,7 @@ class StockLevelResource extends BaseResource
     protected static ?string $model = StockLevel::class;
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
     protected static ?string $navigationGroup = 'Reports';
-    protected static ?int    $navigationSort = 3;
+    protected static ?int $navigationSort = 3;
 
     public static function canViewAny(): bool
     {
@@ -37,12 +37,15 @@ class StockLevelResource extends BaseResource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('branch.name')
-                    ->label('Branch')->sortable()->searchable(),
+                    ->label('Branch')
+                    ->sortable()
+                    ->searchable(),
 
                 Tables\Columns\TextColumn::make('product.name')
-                    ->label('Product')->sortable()->searchable(),
+                    ->label('Product')
+                    ->sortable()
+                    ->searchable(),
 
-                // Use a computed state so we can safely fall back:
                 Tables\Columns\TextColumn::make('unit_label')
                     ->label('Unit')
                     ->state(
@@ -53,20 +56,24 @@ class StockLevelResource extends BaseResource
                     ),
 
                 Tables\Columns\TextColumn::make('qty')
-                    ->label('On hand')
+                    ->label('On Hand')
                     ->numeric(3)
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('reserved')
                     ->label('Reserved')
                     ->state(fn($record) => (float)($record->reserved ?? 0))
-                    ->formatStateUsing(fn($state) => number_format((float)$state, 3))
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->formatStateUsing(fn($state) => number_format((float)$state, 3)),
 
                 Tables\Columns\TextColumn::make('available')
                     ->label('Available')
-                    ->state(fn($record) => (float)($record->qty ?? 0) - (float)($record->reserved ?? 0))
-                    ->formatStateUsing(fn($state) => number_format((float)$state, 3)),
+                    ->state(
+                        fn($record) =>
+                        (float)($record->qty ?? 0) - (float)($record->reserved ?? 0)
+                    )
+                    ->formatStateUsing(fn($state) => number_format((float)$state, 3))
+                    ->badge()
+                    ->color(fn($state) => $state <= 0 ? 'danger' : 'success'),
 
                 Tables\Columns\TextColumn::make('updated_at')
                     ->since()
@@ -74,15 +81,50 @@ class StockLevelResource extends BaseResource
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('branch_id')
-                    ->label('Branch')->relationship('branch', 'name'),
+                    ->relationship('branch', 'name')
+                    ->label('Branch'),
+
                 Tables\Filters\SelectFilter::make('product_id')
-                    ->label('Product')->relationship('product', 'name'),
+                    ->relationship('product', 'name')
+                    ->label('Product'),
+            ])
+            ->headerActions([
+                Tables\Actions\Action::make('exportCsv')
+                    ->label('Export CSV')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('success')
+                    ->action(function ($livewire) {
+                        $filters = $livewire->getTableFiltersForm()->getState();
+                        $branchId = $filters['branch_id']['value'] ?? null; // ✅ fix
+
+                        $rows = \App\Models\StockLevel::query()
+                            ->with(['branch', 'product.baseUnit', 'unit'])
+                            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+                            ->get()
+                            ->map(fn($record) => [
+                                $record->branch?->name,
+                                $record->product?->name,
+                                $record->unit?->name ?? $record->product?->baseUnit?->name ?? '—',
+                                $record->qty,
+                                $record->reserved ?? 0,
+                                ($record->qty ?? 0) - ($record->reserved ?? 0),
+                            ]);
+
+                        $csv = app(\App\Services\ReportService::class)
+                            ->toCsv(['Branch', 'Product', 'Unit', 'On Hand', 'Reserved', 'Available'], $rows);
+
+                        $fileName = 'stock_levels_' . now()->format('Ymd_His') . '.csv';
+                        $path = storage_path("app/$fileName");
+                        file_put_contents($path, $csv);
+
+                        return response()->download($path)->deleteFileAfterSend(true);
+                    })
+
             ])
             ->actions([])
             ->bulkActions([]);
     }
 
-    // Eager-load relations so the Unit column always has access to baseUnit fallback
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
