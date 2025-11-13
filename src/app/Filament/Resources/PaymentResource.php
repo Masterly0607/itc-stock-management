@@ -4,33 +4,28 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\PaymentResource\Pages;
 use App\Models\Payment;
+use App\Models\SalesOrder;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Get;
-use Filament\Forms\Set;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class PaymentResource extends BaseResource
 {
     protected static ?string $model = Payment::class;
-    protected static ?string $navigationIcon = 'heroicon-o-credit-card';
+    protected static ?string $navigationIcon  = 'heroicon-o-credit-card';
     protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 35;
+    protected static ?int    $navigationSort  = 40;
 
+    /** Who can see Payments menu / list page */
     public static function canViewAny(): bool
     {
         $u = auth()->user();
-        return $u?->hasAnyRole(['Distributor', 'Admin', 'Super Admin']) ?? false;
-    }
-
-    public static function canCreate(): bool
-    {
-        $u = auth()->user();
-        return $u?->hasRole('Distributor') ?? false;
+        return $u?->hasAnyRole(['Super Admin', 'Admin']) ?? false;
     }
 
     public static function shouldRegisterNavigation(): bool
@@ -38,59 +33,77 @@ class PaymentResource extends BaseResource
         return static::canViewAny();
     }
 
-
-    public static function form(Forms\Form $form): Forms\Form
+    /** Allow SA + Admin to create payments (override BaseResource) */
+    public static function canCreate(): bool
     {
+        $u = auth()->user();
+        return $u?->hasAnyRole(['Admin']) ?? false;
+    }
+
+
+    public static function form(Form $form): Form
+    {
+        $user = auth()->user();
+
         return $form->schema([
-            Forms\Components\Select::make('sales_order_id')
-                ->label('Order')
-                ->relationship('order', 'id')
-                ->searchable()
-                ->preload()
-                ->reactive()
-                ->afterStateUpdated(function ($state, Set $set) {
-                    if (!$state) return;
-                    $order = \App\Models\SalesOrder::with('payments')->find($state);
-                    if ($order) {
-                        $set('total_display', number_format($order->total_amount, 2));
-                        $set('paid_display', number_format($order->paid_amount, 2));
-                        $set('balance_display', number_format($order->balance, 2));
-                        $set('amount', max(0, $order->balance)); // auto-fill balance
+            Select::make('sales_order_id')
+                ->label('Sales Order')
+                ->relationship(
+                    name: 'order',
+                    titleAttribute: 'id',
+                    modifyQueryUsing: function (Builder $q) use ($user) {
+                        $q->with('branch');
+
+                        if (! $user) {
+                            return $q->whereRaw('1 = 0');
+                        }
+
+                        // SA → all orders
+                        if ($user->hasRole('Super Admin')) {
+                            return;
+                        }
+
+                        // Admin → only their branch orders
+                        if ($user->branch_id) {
+                            $q->where('branch_id', $user->branch_id);
+                        } else {
+                            $q->whereRaw('1 = 0');
+                        }
                     }
-                }),
+                )
+                ->getOptionLabelUsing(function ($value) {
+                    $order = SalesOrder::with('branch')->find($value);
+                    if (! $order) {
+                        return '';
+                    }
 
-            Forms\Components\TextInput::make('total_display')
-                ->label('Order total')
-                ->disabled(),
+                    $branch   = $order->branch?->name ?? 'Unknown branch';
+                    $customer = $order->customer_name ?: 'N/A';
+                    $total    = number_format((float) $order->total_amount, 2);
+                    $paid     = number_format((float) $order->paid_amount, 2);
 
-            Forms\Components\TextInput::make('paid_display')
-                ->label('Paid so far')
-                ->disabled(),
+                    return "#{$order->id} – {$customer} ({$branch}) – {$paid}/{$total}";
+                })
 
-            Forms\Components\TextInput::make('balance_display')
-                ->label('Balance')
-                ->disabled(),
-
-            Forms\Components\TextInput::make('amount')
-                ->numeric()
-                ->required()
-                ->minValue(0.01)
-                ->rule(function (Get $get) {
-                    $orderId = $get('sales_order_id');
-                    if (!$orderId) return null;
-                    $order = \App\Models\SalesOrder::find($orderId);
-                    return $order ? "max:{$order->balance}" : null;
-                }),
-
-            Forms\Components\Select::make('method')
-                ->options([
-                    'CASH' => 'Cash',
-                    'BANK' => 'Bank',
-                    'CARD' => 'Card',
-                ])
                 ->required(),
 
-            Forms\Components\DateTimePicker::make('received_at')
+            TextInput::make('amount')
+                ->numeric()
+                ->minValue(0.01)
+                ->step('0.01')
+                ->required(),
+
+            TextInput::make('currency')
+                ->maxLength(3)
+                ->default('USD')
+                ->required(),
+
+            TextInput::make('method')
+                ->label('Method')
+                ->placeholder('Cash, Transfer, etc.')
+                ->maxLength(50),
+
+            DateTimePicker::make('received_at')
                 ->default(now())
                 ->required(),
         ])->columns(2);
@@ -98,21 +111,83 @@ class PaymentResource extends BaseResource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
-            Tables\Columns\TextColumn::make('sales_order_id')->label('Order #')->sortable(),
-            Tables\Columns\TextColumn::make('amount')->money('usd', true),
-            Tables\Columns\TextColumn::make('method'),
-            Tables\Columns\TextColumn::make('received_at')->dateTime(),
-        ])
-            ->actions([Tables\Actions\EditAction::make(), Tables\Actions\DeleteAction::make()]);
+        return $table
+            ->defaultSort('id', 'desc')
+            ->columns([
+                Tables\Columns\TextColumn::make('id')
+                    ->label('#')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('order.branch.name')
+                    ->label('Branch')
+                    ->sortable()
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('order.customer_name')
+                    ->label('Customer')
+                    ->sortable()
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('amount')
+                    ->label('Amount')
+                    ->money(fn($record) => $record->currency ?? 'USD')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('method')
+                    ->label('Method')
+                    ->sortable()
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('received_at')
+                    ->label('Received at')
+                    ->dateTime()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('created_at')
+                    ->label('Created')
+                    ->since()
+                    ->sortable(),
+            ])
+            ->filters([])
+            ->actions([
+                Tables\Actions\ViewAction::make(),
+
+            ])
+            ->bulkActions([]);
+    }
+
+    /**
+     * SA  -> all payments
+     * Admin -> payments for orders in their branch
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $q = parent::getEloquentQuery()->with(['order.branch']);
+        $u = auth()->user();
+
+        if (! $u) {
+            return $q->whereRaw('1 = 0');
+        }
+
+        if ($u->hasRole('Super Admin')) {
+            return $q;
+        }
+
+        if ($u->hasRole('Admin') && $u->branch_id) {
+            return $q->whereHas('order', function (Builder $orderQ) use ($u) {
+                $orderQ->where('branch_id', $u->branch_id);
+            });
+        }
+
+        return $q->whereRaw('1 = 0');
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListPayments::route('/'),
+            'index'  => Pages\ListPayments::route('/'),
             'create' => Pages\CreatePayment::route('/create'),
-            'edit' => Pages\EditPayment::route('/{record}/edit'),
+            'edit'   => Pages\EditPayment::route('/{record}/edit'),
         ];
     }
 }

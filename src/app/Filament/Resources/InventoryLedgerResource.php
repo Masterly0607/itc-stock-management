@@ -149,8 +149,10 @@ class InventoryLedgerResource extends BaseResource
                         $from  = $filters['posted_at']['from']  ?? null;
                         $until = $filters['posted_at']['until'] ?? null;
 
-                        $rows = \App\Models\InventoryLedger::query()
-                            ->with(['branch', 'product', 'unit', 'user'])
+                        $query = static::getEloquentQuery()
+                            ->with(['branch', 'product', 'unit', 'user']);
+
+                        $rows = $query
                             ->when($from,  fn($q) => $q->whereDate('posted_at', '>=', $from))
                             ->when($until, fn($q) => $q->whereDate('posted_at', '<=', $until))
                             ->orderBy('posted_at')
@@ -168,11 +170,10 @@ class InventoryLedgerResource extends BaseResource
                                 $r->user?->name ?? 'System',
                             ]);
 
-                        $csv = app(\App\Services\ReportService::class)
-                            ->toCsv(
-                                ['Date', 'Branch', 'Product', 'Unit', 'Movement', 'Qty', 'Balance', 'Source', 'Ref', 'User'],
-                                $rows
-                            );
+                        $csv = app(\App\Services\ReportService::class)->toCsv(
+                            ['Date', 'Branch', 'Product', 'Unit', 'Movement', 'Qty', 'Balance', 'Source', 'Ref', 'User'],
+                            $rows
+                        );
 
                         $fileName = 'inventory_ledger_' . now()->format('Ymd_His') . '.csv';
                         $path = storage_path("app/$fileName");
@@ -181,6 +182,7 @@ class InventoryLedgerResource extends BaseResource
                         return response()->download($path)->deleteFileAfterSend(true);
                     }),
             ])
+
             ->actions([])
             ->bulkActions([]);
     }

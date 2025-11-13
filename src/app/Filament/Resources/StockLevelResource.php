@@ -94,25 +94,25 @@ class StockLevelResource extends BaseResource
                     ->sortable()
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('on_hand')
-                    ->label('On Hand')
-                    ->state(function ($record) {
-                        if (Schema::hasColumn('stock_levels', 'on_hand')) {
-                            return (float) ($record->on_hand ?? 0);
-                        }
-                        if (Schema::hasColumn('stock_levels', 'quantity')) {
-                            return (float) ($record->quantity ?? 0);
-                        }
-                        return (float) ($record->qty ?? 0);
-                    })
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 3))
-                    ->sortable(),
+                // Tables\Columns\TextColumn::make('on_hand')
+                //     ->label('On Hand')
+                //     ->state(function ($record) {
+                //         if (Schema::hasColumn('stock_levels', 'on_hand')) {
+                //             return (float) ($record->on_hand ?? 0);
+                //         }
+                //         if (Schema::hasColumn('stock_levels', 'quantity')) {
+                //             return (float) ($record->quantity ?? 0);
+                //         }
+                //         return (float) ($record->qty ?? 0);
+                //     })
+                //     ->formatStateUsing(fn($state) => number_format((float) $state, 3))
+                //     ->sortable(),
 
-                Tables\Columns\TextColumn::make('reserved')
-                    ->label('Reserved')
-                    ->state(fn($record) => (float) ($record->reserved ?? 0))
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 3))
-                    ->sortable(),
+                // Tables\Columns\TextColumn::make('reserved')
+                //     ->label('Reserved')
+                //     ->state(fn($record) => (float) ($record->reserved ?? 0))
+                //     ->formatStateUsing(fn($state) => number_format((float) $state, 3))
+                //     ->sortable(),
 
                 Tables\Columns\TextColumn::make('available')
                     ->label('Available')
@@ -166,11 +166,13 @@ class StockLevelResource extends BaseResource
                             ? ($productFilter['value'] ?? null)
                             : $productFilter;
 
-                        $rows = \App\Models\StockLevel::query()
-                            ->with(['branch', 'product', 'unit'])
-                            ->whereNotNull('unit_id')
+                        //  start from the SAME scoped query as the table
+                        $query = static::getEloquentQuery();
+
+                        $rows = $query
                             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
                             ->when($productId, fn($q) => $q->where('product_id', $productId))
+                            ->with(['branch', 'product', 'unit'])
                             ->get()
                             ->map(function ($record) {
                                 if (Schema::hasColumn('stock_levels', 'on_hand')) {
@@ -188,15 +190,13 @@ class StockLevelResource extends BaseResource
                                     $record->branch?->name,
                                     $record->product?->name,
                                     $record->unit?->name,
-                                    $qty,
-                                    $reserved,
                                     $available,
                                 ];
                             });
 
                         $csv = app(\App\Services\ReportService::class)
                             ->toCsv(
-                                ['Branch', 'Product', 'Unit', 'On Hand', 'Reserved', 'Available'],
+                                ['Branch', 'Product', 'Unit', 'Available'],
                                 $rows
                             );
 
@@ -207,6 +207,7 @@ class StockLevelResource extends BaseResource
                         return response()->download($path)->deleteFileAfterSend(true);
                     }),
             ])
+
             ->actions([])
             ->bulkActions([]);
     }

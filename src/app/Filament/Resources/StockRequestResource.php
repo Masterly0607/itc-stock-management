@@ -189,7 +189,7 @@ class StockRequestResource extends BaseResource
                             ->send();
                     }),
 
-                // ✅ Approve + create Transfer
+                //  Approve + create Transfer
                 // - Super Admin at HQ (or wherever they are) can approve when THEIR branch is the Source
                 // - Province Admin can approve when THEIR branch is the Source
                 Action::make('approve')
@@ -217,6 +217,12 @@ class StockRequestResource extends BaseResource
                             return false;
                         }
 
+                        // Super Admin can approve ANY request
+                        if ($u->hasRole('Super Admin')) {
+                            return true;
+                        }
+
+                        // Admin must belong to the source branch
                         return (int) $u->branch_id === (int) $record->supply_branch_id;
                     })
                     ->requiresConfirmation()

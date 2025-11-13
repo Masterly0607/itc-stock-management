@@ -123,26 +123,26 @@ class LowStockResource extends BaseResource
                     }),
 
                 // On hand
-                Tables\Columns\TextColumn::make('on_hand')
-                    ->label('On Hand')
-                    ->state(function ($record) {
-                        if (Schema::hasColumn('stock_levels', 'on_hand')) {
-                            return (float) ($record->on_hand ?? 0);
-                        }
-                        if (Schema::hasColumn('stock_levels', 'quantity')) {
-                            return (float) ($record->quantity ?? 0);
-                        }
-                        return (float) ($record->qty ?? 0);
-                    })
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 3))
-                    ->sortable(),
+                // Tables\Columns\TextColumn::make('on_hand')
+                //     ->label('On Hand')
+                //     ->state(function ($record) {
+                //         if (Schema::hasColumn('stock_levels', 'on_hand')) {
+                //             return (float) ($record->on_hand ?? 0);
+                //         }
+                //         if (Schema::hasColumn('stock_levels', 'quantity')) {
+                //             return (float) ($record->quantity ?? 0);
+                //         }
+                //         return (float) ($record->qty ?? 0);
+                //     })
+                //     ->formatStateUsing(fn($state) => number_format((float) $state, 3))
+                //     ->sortable(),
 
-                // Reserved
-                Tables\Columns\TextColumn::make('reserved')
-                    ->label('Reserved')
-                    ->state(fn($record) => (float) ($record->reserved ?? 0))
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 3))
-                    ->sortable(),
+                // // Reserved
+                // Tables\Columns\TextColumn::make('reserved')
+                //     ->label('Reserved')
+                //     ->state(fn($record) => (float) ($record->reserved ?? 0))
+                //     ->formatStateUsing(fn($state) => number_format((float) $state, 3))
+                //     ->sortable(),
 
                 // Available = on_hand - reserved
                 Tables\Columns\TextColumn::make('available')
@@ -181,22 +181,44 @@ class LowStockResource extends BaseResource
                     ->action(function ($livewire) {
                         $filters = $livewire->getTableFiltersForm()->getState();
 
-                        // branch_id filter state can be:
-                        // - null
-                        // - int (simple filter)
-                        // - ['value' => int] (Filament v3 default)
+                        // branch_id filter can be: null, int, or ['value' => int]
                         $branchFilter = $filters['branch_id'] ?? null;
-                        if (is_array($branchFilter)) {
-                            $branchId = $branchFilter['value'] ?? null;
-                        } else {
-                            $branchId = $branchFilter;
-                        }
+                        $branchId = is_array($branchFilter)
+                            ? ($branchFilter['value'] ?? null)
+                            : $branchFilter;
 
-                        // Use your default threshold (50 or whatever you want)
-                        $threshold = 50;
+                        // use the SAME scoped query as the table
+                        $query = static::getEloquentQuery()
+                            ->when($branchId, fn($q) => $q->where('branch_id', $branchId));
+
+                        $rows = $query->with(['branch', 'product.baseUnit', 'unit'])
+                            ->get()
+                            ->map(function ($record) {
+                                // calculate Available only
+                                if (\Illuminate\Support\Facades\Schema::hasColumn('stock_levels', 'on_hand')) {
+                                    $qty = (float) ($record->on_hand ?? 0);
+                                } elseif (\Illuminate\Support\Facades\Schema::hasColumn('stock_levels', 'quantity')) {
+                                    $qty = (float) ($record->quantity ?? 0);
+                                } else {
+                                    $qty = (float) ($record->qty ?? 0);
+                                }
+
+                                $reserved  = (float) ($record->reserved ?? 0);
+                                $available = $qty - $reserved;
+
+                                return [
+                                    $record->branch?->name,
+                                    $record->product?->name,
+                                    $record->unit?->name ?? $record->product?->baseUnit?->name ?? '-',
+                                    $available, // ONLY export Available
+                                ];
+                            });
 
                         $csv = app(\App\Services\ReportService::class)
-                            ->lowStockCsv($branchId ? (int) $branchId : null, $threshold);
+                            ->toCsv(
+                                ['Branch', 'Product', 'Unit', 'Available'], // 4 columns
+                                $rows
+                            );
 
                         $fileName = 'low_stock_' . now()->format('Ymd_His') . '.csv';
                         $path = storage_path("app/$fileName");
@@ -205,6 +227,9 @@ class LowStockResource extends BaseResource
                         return response()->download($path)->deleteFileAfterSend(true);
                     }),
             ])
+
+
+
             ->actions([])
             ->bulkActions([]);
     }
