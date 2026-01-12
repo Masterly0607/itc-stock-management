@@ -28,11 +28,13 @@ class AdjustmentService
     // quantity column on stock_levels
     $qtyCol = Schema::hasColumn('stock_levels', 'qty') ? 'qty'
       : (Schema::hasColumn('stock_levels', 'on_hand') ? 'on_hand' : null);
-    if (!$qtyCol) throw new DomainException('stock_levels has no qty/on_hand column.');
+    if (!$qtyCol) {
+      throw new DomainException('stock_levels has no qty/on_hand column.');
+    }
 
     // Pre-check negatives for OUT lines
     foreach ($items as $it) {
-      $delta = (float)$it->qty_delta;
+      $delta = (float) $it->qty_delta;
       if ($delta < 0) {
         $where = [
           'branch_id'  => $adjustment->branch_id,
@@ -50,8 +52,10 @@ class AdjustmentService
 
     DB::transaction(function () use ($adjustment, $items, $userId) {
       foreach ($items as $it) {
-        $delta = (float)$it->qty_delta;
-        if ($delta == 0.0) continue;
+        $delta = (float) $it->qty_delta;
+        if ($delta == 0.0) {
+          continue;
+        }
 
         $payload = [
           'product_id'  => $it->product_id,
@@ -62,7 +66,9 @@ class AdjustmentService
           'source_id'   => $adjustment->id,
           'source_line' => $it->id ?? 0,
         ];
-        if (Schema::hasColumn('inventory_ledger', 'unit_id') && $it->unit_id) {
+
+        // ✅ ALWAYS pass the unit that user selected
+        if ($it->unit_id) {
           $payload['unit_id'] = $it->unit_id;
         }
 

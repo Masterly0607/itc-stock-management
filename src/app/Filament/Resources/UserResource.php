@@ -129,12 +129,19 @@ class UserResource extends BaseResource
 
 
 
-            Forms\Components\Select::make('status')
-                ->options([
-                    'ACTIVE'   => 'ACTIVE',
-                    'INACTIVE' => 'INACTIVE',
-                ])
-                ->required(),
+            Forms\Components\Toggle::make('status')
+                ->label('Is Active')
+                ->default(false) // false = INACTIVE
+                ->afterStateHydrated(function ($component, $state, $set) {
+                    // DB: ACTIVE/INACTIVE → Toggle: true/false
+                    $set('status', $state === 'ACTIVE');
+                })
+                ->dehydrateStateUsing(function ($state) {
+                    // Toggle: true/false → DB: ACTIVE/INACTIVE
+                    return $state ? 'ACTIVE' : 'INACTIVE';
+                })
+                ->dehydrated(true)
+
         ])->columns(2);
     }
 
